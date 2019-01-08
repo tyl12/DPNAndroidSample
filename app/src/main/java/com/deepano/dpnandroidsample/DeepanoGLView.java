@@ -107,6 +107,7 @@ public class DeepanoGLView extends GLSurfaceView {
                             mPaint);
                 }
             }
+
         }
     }
 

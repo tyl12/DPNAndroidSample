@@ -1,6 +1,28 @@
 #include <jni.h>
 #include <time.h>
 #include <unistd.h>
+
+
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <stddef.h>
+
+#include <sys/ioctl.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <sys/inotify.h>
+#include <dirent.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <ctype.h>
+
 #include "dp_api.h"
 #include "Fp16Convert.h"
 #include "mv_types.h"
@@ -9,6 +31,9 @@
 #include "Region.h"
 
 #include <android/log.h>
+#include <array>
+#include <dirent.h>
+#include <fstream>
 
 #define LOG_TAG     "Deepano"
 #define ALOGE(...)      __android_log_print(ANDROID_LOG_ERROR,LOG_TAG,__VA_ARGS__)
@@ -48,7 +73,8 @@ typedef enum NET_CAFFE_TENSFLOW {
     DP_MOBILINERS_NET,
     DP_ALI_FACENET,
     DP_TINY_YOLO_V2_NET,
-    DP_CAFFE_NET,
+    DP_FACE_NET,
+    DP_CAFFE_Nmd
 } DP_MODEL_NET;
 
 //
@@ -67,6 +93,168 @@ extern void video_callback(dp_img_t *img, void *param);
 
 extern void box_callback_model_demo(void *result, void *param);
 
+
+#define PEOPLE_CNT (32)
+float VALID_PEOPLE[PEOPLE_CNT][128];
+char PEOPLE_NAME[PEOPLE_CNT][32];
+
+float VALID_PEOPLE_FOUR_STAGE[PEOPLE_CNT][4];
+
+int Total_valid_people = 0;
+float resultfp32[128];
+float result_stage[4];
+
+int load_local_faces()
+{
+    DIR  *dir;
+    struct dirent *ptr;
+    dir = opendir("/sdcard/face");
+    if (dir == NULL){
+        ALOGE("no face dir found");
+        return -1;
+    }
+
+    int index=0;
+    while((ptr = readdir(dir)) != NULL)
+    {
+        if(strcmp(ptr->d_name,".")==0 || strcmp(ptr->d_name,"..")==0)
+            continue;
+        char filepath[30]="face/";
+        strcat(filepath,ptr->d_name);
+        printf("filepath:%s\n",filepath);
+
+
+        std::ifstream f(filepath);
+        std::string s;
+        int cnt = 0;
+        while(getline(f, s)){
+            float val = atof(s.c_str());
+            VALID_PEOPLE[index][cnt++] = val;
+            if (cnt == 128)
+                break;
+        }
+
+        memcpy(PEOPLE_NAME[index],ptr->d_name,32);
+        std::cout<<"read people feature: "<<(ptr->d_name)<<std::endl;
+        if (index++ == 32)
+            break;
+    }
+
+#if 0
+    for(int ii=0;ii<index;ii++)
+        {
+            for(int jj=0;jj<128;jj++)
+            {
+                printf(" %.3f  ",VALID_PEOPLE[ii][jj]);
+                VALID_PEOPLE_SUM_SIGNAL[ii]+=VALID_PEOPLE[ii][jj];
+                if(ii<32)
+                    VALID_PEOPLE_FOUR_STAGE[ii][0]+=VALID_PEOPLE[ii][jj];
+                else if(ii<64)
+                    VALID_PEOPLE_FOUR_STAGE[ii][1]+=VALID_PEOPLE[ii][jj];
+                else if(ii<96)
+                    VALID_PEOPLE_FOUR_STAGE[ii][2]+=VALID_PEOPLE[ii][jj];
+                else if(ii<128)
+                    VALID_PEOPLE_FOUR_STAGE[ii][3]+=VALID_PEOPLE[ii][jj];
+            }
+
+            printf("\n");
+        }
+#endif
+    Total_valid_people=index;
+    printf("Total_valid_people:%d\n",Total_valid_people);
+    closedir(dir);
+    return 0;
+}
+
+std::array<float, 128> print_facenet_result(void *fathomOutput,char *peo_name)
+{
+    ALOGE("%s E", __FUNCTION__);
+    std::cout<<__FUNCTION__<<":"<<__LINE__<<std::endl;
+
+    u16* probabilities=(u16*)fathomOutput;
+
+    unsigned int resultlen=128;
+
+    float tmp_diff_sum=0.0f;
+    float tmp_diff_stage=0.0f;
+    float tmp_diff_squre=0.0f;
+
+    float Total_diff[32];
+    float this_diff=0.0f;
+    float tmp_mini_diff=100.0f;//set a large one by default
+    int tmp_mini_index=0;
+    std::array<float, 128> feature={0};
+    for(u32 i=0;i<resultlen;i++)
+    {
+
+        resultfp32[i]=f16Tof32(probabilities[i]);
+        feature[i]=resultfp32[i];
+        //printf("resultfp32[%d]:%.3f\n",i,resultfp32[i]);
+        if(i<32)
+            result_stage[0]+=resultfp32[i];
+        if(i>=32&&i<64)
+            result_stage[1]+=resultfp32[i];
+        if(i>=64&&i<96)
+            result_stage[2]+=resultfp32[i];
+        if(i>=96&&i<128)
+            result_stage[3]+=resultfp32[i];
+    }
+    for(int ii=0;ii<4;ii++){
+        ALOGE("result_stage[%d]:%.3f ",ii,result_stage[ii]);
+        printf("result_stage[%d]:%.3f\n",ii,result_stage[ii]);
+    }
+    ALOGE("\n");
+
+    for(int valid_people_index=0;valid_people_index<Total_valid_people;valid_people_index++)
+    {
+        float diff=0.0f;
+        tmp_diff_squre=0.0f;
+        tmp_diff_stage=0.0f;
+        for(int output_index=0;output_index<resultlen;output_index++)
+        {
+            diff=VALID_PEOPLE[valid_people_index][output_index]-resultfp32[output_index];
+            this_diff=pow(diff,2.0f);
+            tmp_diff_squre+=this_diff;
+        }
+        ALOGE("tmp_diff_squre:%.3f \n",tmp_diff_squre);
+        /*for(int ii=0;ii<4;ii++)
+          {
+          diff=result_stage[ii]-VALID_PEOPLE_FOUR_STAGE[valid_people_index][ii];
+          tmp_diff_stage+=pow(diff,2.0f);
+          }
+          printf("\ntmp_diff_stage:%.3f \n",tmp_diff_stage);*/
+        Total_diff[valid_people_index]=tmp_diff_squre;
+
+        ALOGE("\nTotal_diff[%d]:%.3f\n",valid_people_index,Total_diff[valid_people_index]);
+        if(valid_people_index==0)
+        {
+            tmp_mini_diff=Total_diff[0];
+            tmp_mini_index=0;
+        }
+        else
+        {
+            if(tmp_mini_diff>Total_diff[valid_people_index])
+            {
+                tmp_mini_diff=Total_diff[valid_people_index];
+                tmp_mini_index=valid_people_index;
+            }
+        }
+    }
+    if (Total_valid_people > 0){
+        ALOGE("\nTotal_diff:%.3f\n",tmp_mini_diff);
+        printf("\nTotal_diff:%.3f\n",tmp_mini_diff);
+        if(tmp_mini_diff>=-1&&tmp_mini_diff<=1)
+            memcpy(peo_name,PEOPLE_NAME[tmp_mini_index],32);
+        ALOGE("detectored_name:%s\n",peo_name);
+        printf("detectored_name:%s\n",peo_name);
+    }
+
+    for(int ii=0;ii<4;ii++)
+        result_stage[ii]=0.0f;
+
+    return feature;
+}
+
 JNIEXPORT jint JNICALL
 Java_com_deepano_dpnandroidsample_DeepanoApiFactory_initDevice(
         JNIEnv *env,
@@ -80,6 +268,7 @@ Java_com_deepano_dpnandroidsample_DeepanoApiFactory_initDevice(
     g_coordBoxClass = static_cast<jclass>(env->NewGlobalRef(coordBoxClass));
 
 
+    load_local_faces();
     ret = dp_init(fd);
     if (ret == 0) {
         devStatus = 0;
@@ -88,6 +277,7 @@ Java_com_deepano_dpnandroidsample_DeepanoApiFactory_initDevice(
         ALOGE("init device failed\n");
     }
     return ret;
+
 }
 
 JNIEXPORT jint JNICALL
@@ -131,17 +321,29 @@ Java_com_deepano_dpnandroidsample_DeepanoApiFactory_netProc(
 
     ret = dp_update_model(path); // transfer blob model
     if (ret == 0) {
-        ALOGE("Test dp_update_model sucessfully!\n");
+        ALOGE("Test dp_update_model1 sucessfully!\n");
     } else {
-        ALOGE("Test dp_update_model failed !\n");
+        ALOGE("Test dp_update_model1 failed !\n");
         return -1;
     }
 
-    DP_MODEL_NET net = DP_SSD_MOBILI_NET;
-    dp_register_video_frame_cb(video_callback, &net); // video callback
-    dp_register_box_device_cb(box_callback_model_demo, &net); //receive the output buffer of the first NN
+    ret = dp_update_model_2("/sdcard/face_recogntion.graph"); // transfer blob model
+    if (ret == 0) {
+        ALOGE("Test dp_update_model2 sucessfully!\n");
+    } else {
+        ALOGE("Test dp_update_model2 failed !\n");
+        return -1;
+    }
+
+    DP_MODEL_NET net_1 = DP_SSD_MOBILI_NET;
+    dp_register_video_frame_cb(video_callback, &net_1); // video callback
+    dp_register_box_device_cb(box_callback_model_demo, &net_1); //receive the output buffer of the first NN
     //dp_register_fps_device_cb(fps_callback,&net); // fps
     //dp_register_parse_blob_time_device_cb(blob_parse_callback,NULL); // model parsing-time
+
+    DP_MODEL_NET net_2=DP_FACE_NET;
+    dp_register_second_box_device_cb(box_callback_model_demo,&net_2);
+
 
     ret = dp_start_camera_video(); // NN will start to work if camera is on
     if (ret == 0) {
@@ -189,110 +391,148 @@ void video_callback(dp_img_t *img, void *param) {
     env->DeleteLocalRef(javaClass);
 }
 
+
+int dump_index = 0;
+int num_valid_boxes = 0;
+int ProcessedBoxCnt=0;
+std::vector<std::string> nameVector;
 void box_callback_model_demo(void *result, void *param) {
     DP_MODEL_NET model = *((DP_MODEL_NET *) param);
     // i have a bug here,can not fetch the right param,
     // this is a movidius system bug,i will fix it later.
 
     //
-    //  
-    //if( model == DP_SSD_MOBILI_NET){
-    char *category[] = {"background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus",
-                        "car", "cat", "chair", "cow", "diningtable",
-                        "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa",
-                        "train", "tvmonitor"};
-    u16 *probabilities = (u16 *) result;
-    unsigned int resultlen = 707;
-    float *resultfp32;
-    resultfp32 = (float *) malloc(resultlen * sizeof(*resultfp32));
-    int img_width = 1280;
-    int img_height = 960;
-    for (u32 i = 0; i < resultlen; i++)
-        resultfp32[i] = f16Tof32(probabilities[i]);
-    int num_valid_boxes = int(resultfp32[0]);
-    int index = 0;
-    ALOGE("num_valid_bxes:%d\n", num_valid_boxes);
-    for (int box_index = 0; box_index < num_valid_boxes; box_index++) {
-        int base_index = 7 * box_index + 7;
-        if (resultfp32[base_index + 6] < 0
-            || resultfp32[base_index + 6] >= 1
-            || resultfp32[base_index + 5] < 0
-            || resultfp32[base_index + 5] >= 1
-            || resultfp32[base_index + 4] < 0
-            || resultfp32[base_index + 4] >= 1
-            || resultfp32[base_index + 3] < 0
-            || resultfp32[base_index + 3] >= 1
-            || resultfp32[base_index + 2] >= 1
-            || resultfp32[base_index + 2] < 0
-            || resultfp32[base_index + 1] < 0) {
-            continue;
+    //
+    if( model == DP_SSD_MOBILI_NET) {
+        char *category[] = {"background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus",
+                            "car", "cat", "chair", "cow", "diningtable",
+                            "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa",
+                            "train", "tvmonitor"};
+        u16 *probabilities = (u16 *) result;
+        unsigned int resultlen = 707;
+        float *resultfp32;
+        resultfp32 = (float *) malloc(resultlen * sizeof(*resultfp32));
+        int img_width = 1280;
+        int img_height = 960;
+        for (u32 i = 0; i < resultlen; i++)
+            resultfp32[i] = f16Tof32(probabilities[i]);
+        num_valid_boxes = int(resultfp32[0]);
+        int index = 0;
+        ALOGE("num_valid_bxes:%d\n", num_valid_boxes);
+        for (int box_index = 0; box_index < num_valid_boxes; box_index++) {
+            int base_index = 7 * box_index + 7;
+            if (resultfp32[base_index + 6] < 0
+                || resultfp32[base_index + 6] >= 1
+                || resultfp32[base_index + 5] < 0
+                || resultfp32[base_index + 5] >= 1
+                || resultfp32[base_index + 4] < 0
+                || resultfp32[base_index + 4] >= 1
+                || resultfp32[base_index + 3] < 0
+                || resultfp32[base_index + 3] >= 1
+                || resultfp32[base_index + 2] >= 1
+                || resultfp32[base_index + 2] < 0
+                || resultfp32[base_index + 1] < 0) {
+                continue;
+            }
+            ALOGE(":::::%d %f %f %f %f %f\n",
+                  int(resultfp32[base_index + 1]),
+                  resultfp32[base_index + 2],
+                  resultfp32[base_index + 3],
+                  resultfp32[base_index + 4],
+                  resultfp32[base_index + 5],
+                  resultfp32[base_index + 6]);
+            box_demo[index].x1 = (int(resultfp32[base_index + 3] * img_width) > 0) ? int(
+                    resultfp32[base_index + 3] * img_width) : 0;
+            box_demo[index].x2 = (int(resultfp32[base_index + 5] * img_width) < img_width) ? int(
+                    resultfp32[base_index + 5] * img_width) : img_width;
+            box_demo[index].y1 = (int(resultfp32[base_index + 4] * img_height) > 0) ? int(
+                    resultfp32[base_index + 4] * img_height) : 0;
+            box_demo[index].y2 = (int(resultfp32[base_index + 6] * img_height) < img_height) ? int(
+                    resultfp32[base_index + 6] * img_height) : img_height;
+            memcpy(categoles[index], category[int(resultfp32[base_index + 1])], 20);
+            index++;
         }
-        ALOGE(":::::%d %f %f %f %f %f\n",
-              int(resultfp32[base_index + 1]),
-              resultfp32[base_index + 2],
-              resultfp32[base_index + 3],
-              resultfp32[base_index + 4],
-              resultfp32[base_index + 5],
-              resultfp32[base_index + 6]);
-        box_demo[index].x1 = (int(resultfp32[base_index + 3] * img_width) > 0) ? int(
-                resultfp32[base_index + 3] * img_width) : 0;
-        box_demo[index].x2 = (int(resultfp32[base_index + 5] * img_width) < img_width) ? int(
-                resultfp32[base_index + 5] * img_width) : img_width;
-        box_demo[index].y1 = (int(resultfp32[base_index + 4] * img_height) > 0) ? int(
-                resultfp32[base_index + 4] * img_height) : 0;
-        box_demo[index].y2 = (int(resultfp32[base_index + 6] * img_height) < img_height) ? int(
-                resultfp32[base_index + 6] * img_height) : img_height;
-        memcpy(categoles[index], category[int(resultfp32[base_index + 1])], 20);
-        index++;
+        //usleep(2000 * 1000);
+        num_box_demo = index;
+        free(resultfp32);
+        ProcessedBoxCnt = 0;
+        nameVector.clear();
+        nameVector.reserve(num_box_demo);
     }
-    usleep(2000*1000);
-    num_box_demo = index;
-    free(resultfp32);
+    else if (model == DP_FACE_NET)
+    {
+        ALOGE("cdk_result_model: DP_FACE_NET");
+        char detector_people_name[32]={'\n'};
+        std::array<float, 128> feature = print_facenet_result(result,detector_people_name);
 
-    JNIEnv *env;
+        {
+            char fname[64];
+            sprintf(fname, "/sdcard/feature_%d_%s.txt", dump_index, detector_people_name);
+            if (strlen(detector_people_name) > 1)
+                ALOGE("Found face: %s", detector_people_name);
+            std::ofstream of(fname);
+            for (u32 i = 0; i < feature.size(); i++) {
+                //of << i<<": "<< feature[i]<<std::endl;
+                of << feature[i] << std::endl;
+            }
+        }
+        nameVector.push_back(detector_people_name);
 
-    int getEnvStat = g_VM->GetEnv((void **) &env, JNI_VERSION_1_6);
-    if (getEnvStat == JNI_EDETACHED) {
-        if (g_VM->AttachCurrentThread(&env, NULL) != 0) {
-            return;
+        ProcessedBoxCnt++;
+        if (ProcessedBoxCnt == num_box_demo)
+        {
+            JNIEnv *env;
+
+            int getEnvStat = g_VM->GetEnv((void **) &env, JNI_VERSION_1_6);
+            if (getEnvStat == JNI_EDETACHED) {
+                if (g_VM->AttachCurrentThread(&env, NULL) != 0) {
+                    return;
+                }
+            }
+
+            jclass javaClass = env->GetObjectClass(g_obj);
+
+            if (javaClass == 0) {
+                ALOGE("g_class is null\n");
+                g_VM->DetachCurrentThread();
+                return;
+            }
+            jmethodID javaCallbackId = env->GetMethodID(javaClass, "getCoordinate",
+                                                        "([Lcom/deepano/dpnandroidsample/CoordBox;)V");
+
+            if (javaCallbackId == 0) {
+                ALOGE("javaCallbackId is 0\n");
+                return;
+            }
+
+            jobjectArray boxArray;
+            boxArray = env->NewObjectArray(num_valid_boxes, g_coordBoxClass, 0);
+
+            jfieldID x1 = env->GetFieldID(g_coordBoxClass, "x1", "I");
+            jfieldID y1 = env->GetFieldID(g_coordBoxClass, "y1", "I");
+            jfieldID x2 = env->GetFieldID(g_coordBoxClass, "x2", "I");
+            jfieldID y2 = env->GetFieldID(g_coordBoxClass, "y2", "I");
+            jfieldID name = env->GetFieldID(g_coordBoxClass, "name", "Ljava/lang/String;");
+
+            jmethodID objectClassInitID = (env)->GetMethodID(g_coordBoxClass, "<init>", "()V");
+            jobject objectNewEng;
+            for (int box_index = 0; box_index < num_valid_boxes; box_index++) {
+                objectNewEng = env->NewObject(g_coordBoxClass, objectClassInitID);
+                env->SetIntField(objectNewEng, x1, box_demo[box_index].x1);
+                env->SetIntField(objectNewEng, y1, box_demo[box_index].y1);
+                env->SetIntField(objectNewEng, x2, box_demo[box_index].x2);
+                env->SetIntField(objectNewEng, y2, box_demo[box_index].y2);
+
+                jstring j_str = env->NewStringUTF(nameVector[box_index].c_str());
+                env->SetObjectField(objectNewEng, name, j_str);
+
+                env->SetObjectArrayElement(boxArray, box_index, objectNewEng);
+                env->DeleteLocalRef(objectNewEng);
+            }
+
+            env->CallVoidMethod(g_obj, javaCallbackId, boxArray);
+            env->DeleteLocalRef(boxArray);
+            env->DeleteLocalRef(javaClass);
         }
     }
-
-    jclass javaClass = env->GetObjectClass(g_obj);
-
-    if (javaClass == 0) {
-        ALOGE("g_class is null\n");
-        g_VM->DetachCurrentThread();
-        return;
-    }
-    jmethodID javaCallbackId = env->GetMethodID(javaClass, "getCoordinate", "([Lcom/deepano/dpnandroidsample/CoordBox;)V");
-
-    if (javaCallbackId == 0) {
-        ALOGE("javaCallbackId is 0\n");
-        return;
-    }
-
-    jobjectArray boxArray;
-    boxArray = env->NewObjectArray(num_valid_boxes, g_coordBoxClass, 0);
-
-    jfieldID x1 = env->GetFieldID(g_coordBoxClass, "x1", "I");
-    jfieldID y1 = env->GetFieldID(g_coordBoxClass, "y1", "I");
-    jfieldID x2 = env->GetFieldID(g_coordBoxClass, "x2", "I");
-    jfieldID y2 = env->GetFieldID(g_coordBoxClass, "y2", "I");
-
-    jmethodID objectClassInitID = (env)->GetMethodID(g_coordBoxClass, "<init>", "()V");
-    jobject objectNewEng;
-    for (int box_index = 0; box_index < num_valid_boxes; box_index++) {
-        objectNewEng = env->NewObject(g_coordBoxClass, objectClassInitID);
-        env->SetIntField(objectNewEng, x1, box_demo[box_index].x1);
-        env->SetIntField(objectNewEng, y1, box_demo[box_index].y1);
-        env->SetIntField(objectNewEng, x2, box_demo[box_index].x2);
-        env->SetIntField(objectNewEng, y2, box_demo[box_index].y2);
-        env->SetObjectArrayElement(boxArray, box_index, objectNewEng);
-        env->DeleteLocalRef(objectNewEng);
-    }
-
-    env->CallVoidMethod(g_obj, javaCallbackId, boxArray);
-    env->DeleteLocalRef(boxArray);
-    env->DeleteLocalRef(javaClass);
 }
