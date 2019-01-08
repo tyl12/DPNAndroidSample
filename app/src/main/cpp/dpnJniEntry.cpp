@@ -1,4 +1,6 @@
 #include <jni.h>
+#include <time.h>
+#include <unistd.h>
 #include "dp_api.h"
 #include "Fp16Convert.h"
 #include "mv_types.h"
@@ -189,7 +191,11 @@ void video_callback(dp_img_t *img, void *param) {
 
 void box_callback_model_demo(void *result, void *param) {
     DP_MODEL_NET model = *((DP_MODEL_NET *) param);
-    // i have a bug here,can not fetch the right param,this is a movidius system bug,i will fix it later.
+    // i have a bug here,can not fetch the right param,
+    // this is a movidius system bug,i will fix it later.
+
+    //
+    //  
     //if( model == DP_SSD_MOBILI_NET){
     char *category[] = {"background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus",
                         "car", "cat", "chair", "cow", "diningtable",
@@ -239,6 +245,7 @@ void box_callback_model_demo(void *result, void *param) {
         memcpy(categoles[index], category[int(resultfp32[base_index + 1])], 20);
         index++;
     }
+    usleep(2000*1000);
     num_box_demo = index;
     free(resultfp32);
 

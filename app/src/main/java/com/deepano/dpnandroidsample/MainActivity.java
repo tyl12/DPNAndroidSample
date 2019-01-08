@@ -81,7 +81,8 @@ public class MainActivity extends AppCompatActivity {
                                         String pathInRaspberry =
                                                "/sdcard/Download/SSD_MobileNet_object.blob";
                                         String pathInAndroid = Environment.getExternalStorageDirectory()+
-                                                "/SSD_MobileNet_object.blob";
+                                               // "/SSD_MobileNet_object.blob";
+                                                "/face_detector.Blob";
 
                                         fd = connection.getFileDescriptor();
                                         apiFactory.initDevice(fd);

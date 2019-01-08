@@ -14,6 +14,10 @@ android {
                 cppFlags ""
             }
         }
+        ndk {
+            abiFilters 'armeabi-v7a'
+            abiFilters 'arm64-v8a'
+        }
     }
     buildTypes {
         release {
@@ -30,7 +34,7 @@ android {
     sourceSets {
         main {
             //res.srcDirs = ['src/main/res', 'src/main/res-redpacket', 'src/main/res-umeng']
-            jniLibs.srcDirs = ['/Users/xutianyi/Desktop/usbjni/libusb/libs']
+            jniLibs.srcDirs = ['./libs']
         }
     }
 }
