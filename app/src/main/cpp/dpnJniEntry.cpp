@@ -56,48 +56,41 @@ Java_com_deepano_dpnandroidsample_DeepanoApiFactory_netProc(
         jobject /* this */, jstring blobPath);
 };
 
-#if 0
+#if 1
 #define MOVIDIUS_FP32
+
+extern "C" {
+
 
 unsigned int rnd_mode;
 unsigned int exceptionsReg;
-unsigned int* exceptions = &exceptionsReg;
-unsigned int f16_shift_left(unsigned int op, unsigned int cnt)
-{
+unsigned int *exceptions = &exceptionsReg;
+unsigned int f16_shift_left(unsigned int op, unsigned int cnt) {
     unsigned int result;
-    if (cnt == 0)
-    {
+    if (cnt == 0) {
         result = op;
-    }
-    else if (cnt < 32)
-    {
+    } else if (cnt < 32) {
         result = (op << cnt);
-    }
-    else
-    {
+    } else {
         result = 0;
     }
     return result;
 }
 
-float f16Tof32(unsigned int x)
-{
+float f16Tof32(unsigned int x) {
     unsigned int sign;
     int exp;
     unsigned int frac;
     unsigned int result;
-    u32f32       u;
+    u32f32 u;
 
     frac = EXTRACT_F16_FRAC(x);
-    exp  = EXTRACT_F16_EXP(x);
+    exp = EXTRACT_F16_EXP(x);
     sign = EXTRACT_F16_SIGN(x);
-    if (exp == 0x1F)
-    {
-        if (frac != 0)
-        {
+    if (exp == 0x1F) {
+        if (frac != 0) {
             // NaN
-            if (F16_IS_SNAN(x))
-            {
+            if (F16_IS_SNAN(x)) {
                 *exceptions |= F32_EX_INVALID;
             }
             result = 0;
@@ -109,23 +102,16 @@ float f16Tof32(unsigned int x)
 #else
             result |= ((sign << 31) | 0x7FC00000);
 #endif
-        }
-        else
-        {
+        } else {
             //infinity
             result = PACK_F32(sign, 0xFF, 0);
         }
-    }
-    else if (exp == 0)
-    {
+    } else if (exp == 0) {
         //either denormal or zero
-        if (frac == 0)
-        {
+        if (frac == 0) {
             //zero
             result = PACK_F32(sign, 0, 0);
-        }
-        else
-        {
+        } else {
             //subnormal
 #ifndef MOVIDIUS_FP32
             f16_normalize_subnormal(&frac, &exp);
@@ -138,9 +124,7 @@ float f16Tof32(unsigned int x)
             result = PACK_F32(sign, 0, 0);
 #endif
         }
-    }
-    else
-    {
+    } else {
         // ALDo: is the value 13 ok??
         result = f16_shift_left(frac, 13);
         result = PACK_F32(sign, (exp + 0x70), result);
@@ -149,10 +133,36 @@ float f16Tof32(unsigned int x)
     u.u32 = result;
     return u.f32; //andreil
 }
-#endif
 
-typedef enum NET_CAFFE_TENSFLOW {
-    DP_AGE_NET = 0,
+
+} //extern "C"
+
+#endif
+//typedef enum NET_CAFFE_TENSFLOW {
+//    DP_AGE_NET = 0,
+//    DP_ALEX_NET,
+//    DP_GOOGLE_NET,
+//    DP_GENDER_NET,
+//    DP_TINI_YOLO_NET,
+//    DP_SSD_MOBILI_NET,
+//    DP_RES_NET,
+//    DP_SQUEEZE_NET,
+//    DP_MNIST_NET,
+//    DP_INCEPTION_V1,
+//    DP_INCEPTION_V2,
+//    DP_INCEPTION_V3,
+//    DP_INCEPTION_V4,
+//    DP_MOBILINERS_NET,
+//    DP_ALI_FACENET,
+//    DP_TINY_YOLO_V2_NET,
+//    DP_FACE_NET,
+//    DP_CAFFE_Nmd
+//} DP_MODEL_NET;
+
+
+typedef enum NET_CAFFE_TENSFLOW
+{
+    DP_AGE_NET=0,
     DP_ALEX_NET,
     DP_GOOGLE_NET,
     DP_GENDER_NET,
@@ -162,15 +172,12 @@ typedef enum NET_CAFFE_TENSFLOW {
     DP_SQUEEZE_NET,
     DP_MNIST_NET,
     DP_INCEPTION_V1,
-    DP_INCEPTION_V2,
-    DP_INCEPTION_V3,
-    DP_INCEPTION_V4,
     DP_MOBILINERS_NET,
-    DP_ALI_FACENET,
     DP_TINY_YOLO_V2_NET,
+    DP_TINY_YOLO_V2_FACE_NET,
     DP_FACE_NET,
-    DP_CAFFE_Nmd
 } DP_MODEL_NET;
+
 
 //
 JavaVM *g_VM;
@@ -214,10 +221,11 @@ int load_local_faces()
     {
         if(strcmp(ptr->d_name,".")==0 || strcmp(ptr->d_name,"..")==0)
             continue;
-        char filepath[30]="face/";
+        char filepath[30]="/sdcard/face/";
+
         strcat(filepath,ptr->d_name);
         printf("filepath:%s\n",filepath);
-
+        ALOGE("filepath:%s\n",filepath);
 
         std::ifstream f(filepath);
         std::string s;
@@ -231,6 +239,8 @@ int load_local_faces()
 
         memcpy(PEOPLE_NAME[index],ptr->d_name,32);
         std::cout<<"read people feature: "<<(ptr->d_name)<<std::endl;
+        ALOGE("read people feature: %s\n", (ptr->d_name));
+
         if (index++ == 32)
             break;
     }
@@ -257,6 +267,7 @@ int load_local_faces()
 #endif
     Total_valid_people=index;
     printf("Total_valid_people:%d\n",Total_valid_people);
+    ALOGE("Total_valid_people:%d\n",Total_valid_people);
     closedir(dir);
     return 0;
 }
@@ -265,6 +276,8 @@ std::array<float, 128> print_facenet_result(void *fathomOutput,char *peo_name)
 {
     ALOGE("%s E", __FUNCTION__);
     std::cout<<__FUNCTION__<<":"<<__LINE__<<std::endl;
+    for(int ii=0;ii<4;ii++)
+        result_stage[ii]=0.0f;
 
     u16* probabilities=(u16*)fathomOutput;
 
@@ -285,6 +298,9 @@ std::array<float, 128> print_facenet_result(void *fathomOutput,char *peo_name)
         resultfp32[i]=f16Tof32(probabilities[i]);
         feature[i]=resultfp32[i];
         //printf("resultfp32[%d]:%.3f\n",i,resultfp32[i]);
+        //ALOGE("resultfp32[%d]:%.3f",i, resultfp32[i]);
+
+
         if(i<32)
             result_stage[0]+=resultfp32[i];
         if(i>=32&&i<64)
@@ -308,10 +324,11 @@ std::array<float, 128> print_facenet_result(void *fathomOutput,char *peo_name)
         for(int output_index=0;output_index<resultlen;output_index++)
         {
             diff=VALID_PEOPLE[valid_people_index][output_index]-resultfp32[output_index];
-            this_diff=pow(diff,2.0f);
+            //this_diff=pow(diff,2.0f);
+            this_diff= diff * diff;
             tmp_diff_squre+=this_diff;
         }
-        ALOGE("tmp_diff_squre:%.3f \n",tmp_diff_squre);
+        ALOGE("tmp_diff_squre:%.5f \n",tmp_diff_squre);
         /*for(int ii=0;ii<4;ii++)
           {
           diff=result_stage[ii]-VALID_PEOPLE_FOUR_STAGE[valid_people_index][ii];
@@ -320,7 +337,7 @@ std::array<float, 128> print_facenet_result(void *fathomOutput,char *peo_name)
           printf("\ntmp_diff_stage:%.3f \n",tmp_diff_stage);*/
         Total_diff[valid_people_index]=tmp_diff_squre;
 
-        ALOGE("\nTotal_diff[%d]:%.3f\n",valid_people_index,Total_diff[valid_people_index]);
+        ALOGE("\nTotal_diff[%d]:%.5f \n",valid_people_index,Total_diff[valid_people_index]);
         if(valid_people_index==0)
         {
             tmp_mini_diff=Total_diff[0];
@@ -336,10 +353,12 @@ std::array<float, 128> print_facenet_result(void *fathomOutput,char *peo_name)
         }
     }
     if (Total_valid_people > 0){
-        ALOGE("\nTotal_diff:%.3f\n",tmp_mini_diff);
-        printf("\nTotal_diff:%.3f\n",tmp_mini_diff);
-        if(tmp_mini_diff>=-1&&tmp_mini_diff<=1)
+        ALOGE("\nmin diff:%.3f\n",tmp_mini_diff);
+        printf("\nmin diff:%.3f\n",tmp_mini_diff);
+
+        if(tmp_mini_diff>=-1 && tmp_mini_diff<= 1.0)
             memcpy(peo_name,PEOPLE_NAME[tmp_mini_index],32);
+
         ALOGE("detectored_name:%s\n",peo_name);
         printf("detectored_name:%s\n",peo_name);
     }
@@ -398,21 +417,30 @@ Java_com_deepano_dpnandroidsample_DeepanoApiFactory_startCamera(
 
 }
 
+DP_MODEL_NET net_1 = DP_SSD_MOBILI_NET;
+DP_MODEL_NET net_2=DP_FACE_NET;
+
 JNIEXPORT jint JNICALL
 Java_com_deepano_dpnandroidsample_DeepanoApiFactory_netProc(
         JNIEnv *env,
         jobject /* this */, jstring blobPath) {
     jint ret;
-    jint blob_nums = 1; //numbers of the blobs；
-    dp_blob_parm_t parms = {0, 300, 300, 707 * 2}; // NN image input size
-    dp_netMean mean = {127.5, 127.5, 127.5, 127.5}; //average && std
+//    jint blob_nums = 1; //numbers of the blobs；
+//    dp_blob_parm_t parms = {0, 300, 300, 707 * 2}; // NN image input size
+//    dp_netMean mean = {127.5, 127.5, 127.5, 127.5}; //average && std
+
+    jint blob_nums = 2; //numbers of the blobs；
+    dp_blob_parm_t parms[2] = {
+            {0, 300, 300, 707 * 2},
+            {0,160,160,128*2}}; // NN image input size
+    dp_netMean mean[2]={{0,0,0,255},{112.2917,112.2917,112.2917,59.7970}};
 
     const char *path = env->GetStringUTFChars(blobPath, 0);
     ALOGE("Blob Path = %s\n", path);
 
     dp_set_blob_image_size(&BLOB_IMAGE_SIZE); //here is 1280*960;it can be modified to a customization size
-    dp_set_blob_parms(blob_nums, &parms); // transfer blob params
-    dp_set_blob_mean_std(blob_nums, &mean); //transfer average && std
+    dp_set_blob_parms(blob_nums, parms); // transfer blob params
+    dp_set_blob_mean_std(blob_nums, mean); //transfer average && std
 
     ret = dp_update_model(path); // transfer blob model
     if (ret == 0) {
@@ -430,15 +458,13 @@ Java_com_deepano_dpnandroidsample_DeepanoApiFactory_netProc(
         return -1;
     }
 
-    DP_MODEL_NET net_1 = DP_SSD_MOBILI_NET;
-    dp_register_video_frame_cb(video_callback, &net_1); // video callback
     dp_register_box_device_cb(box_callback_model_demo, &net_1); //receive the output buffer of the first NN
     //dp_register_fps_device_cb(fps_callback,&net); // fps
     //dp_register_parse_blob_time_device_cb(blob_parse_callback,NULL); // model parsing-time
 
-    DP_MODEL_NET net_2=DP_FACE_NET;
     dp_register_second_box_device_cb(box_callback_model_demo,&net_2);
 
+    dp_register_video_frame_cb(video_callback, &net_1); // video callback
 
     ret = dp_start_camera_video(); // NN will start to work if camera is on
     if (ret == 0) {
@@ -492,14 +518,15 @@ int num_valid_boxes = 0;
 int ProcessedBoxCnt=0;
 std::vector<std::string> nameVector;
 
-int type = 0;
+//int type = 0;
 void box_callback_model_demo(void *result, void *param) {
     DP_MODEL_NET model = *((DP_MODEL_NET *) param);
     // i have a bug here,can not fetch the right param,
     // this is a movidius system bug,i will fix it later.
 
-    if (type == 0){
-    //if( model == DP_SSD_MOBILI_NET) {
+    //if (type == 0){
+    if( model == DP_SSD_MOBILI_NET) {
+        ALOGE("cdk_result_model: DP_SSD_MOBILI_NET");
         char *category[] = {"background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus",
                             "car", "cat", "chair", "cow", "diningtable",
                             "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa",
@@ -513,11 +540,11 @@ void box_callback_model_demo(void *result, void *param) {
         for (u32 i = 0; i < resultlen; i++)
             resultfp32[i] = f16Tof32(probabilities[i]);
         num_valid_boxes = int(resultfp32[0]);
-        if (num_valid_boxes >5 || num_box_demo < 0){
-            type = 0;
-            free(resultfp32);
-            return;
-        }
+//        if (num_valid_boxes >5 || num_box_demo < 0){
+//            type = 0;
+//            free(resultfp32);
+//            return;
+//        }
         int index = 0;
         ALOGE("num_valid_bxes:%d\n", num_valid_boxes);
         for (int box_index = 0; box_index < num_valid_boxes; box_index++) {
@@ -560,11 +587,11 @@ void box_callback_model_demo(void *result, void *param) {
         nameVector.clear();
         if (num_box_demo > 0) {
             nameVector.reserve(num_box_demo);
-            type = 1;
+            //type = 1;
         }
     }
-    //else if (model == DP_FACE_NET)
-    else if (type == 1)
+    else if (model == DP_FACE_NET)
+    //else if (type == 1)
     {
         ALOGE("cdk_result_model: DP_FACE_NET");
         char detector_people_name[32]={'\n'};
@@ -586,7 +613,7 @@ void box_callback_model_demo(void *result, void *param) {
         ProcessedBoxCnt++;
         if (ProcessedBoxCnt == num_box_demo)
         {
-            type = 0;
+            //type = 0;
             JNIEnv *env;
 
             int getEnvStat = g_VM->GetEnv((void **) &env, JNI_VERSION_1_6);

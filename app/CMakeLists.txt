@@ -24,10 +24,15 @@ find_library( # Sets the name of the path variable.
 add_library(dpnusb SHARED IMPORTED)
 set_target_properties(dpnusb PROPERTIES IMPORTED_LOCATION    ${CMAKE_SOURCE_DIR}/libs/${ANDROID_ABI}/libdpnusb.so)
 
+add_library(usbnok SHARED IMPORTED)
+set_target_properties(usbnok PROPERTIES IMPORTED_LOCATION    ${CMAKE_SOURCE_DIR}/libs/${ANDROID_ABI}/libusbnok.so)
+
+
 target_link_libraries( # Specifies the target library.
                        dpAndroidApi
 
                        # Links the target library to the log library
                        # included in the NDK.
                        ${log-lib}
+                        usbnok
                        dpnusb)
