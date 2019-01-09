@@ -56,6 +56,101 @@ Java_com_deepano_dpnandroidsample_DeepanoApiFactory_netProc(
         jobject /* this */, jstring blobPath);
 };
 
+#if 0
+#define MOVIDIUS_FP32
+
+unsigned int rnd_mode;
+unsigned int exceptionsReg;
+unsigned int* exceptions = &exceptionsReg;
+unsigned int f16_shift_left(unsigned int op, unsigned int cnt)
+{
+    unsigned int result;
+    if (cnt == 0)
+    {
+        result = op;
+    }
+    else if (cnt < 32)
+    {
+        result = (op << cnt);
+    }
+    else
+    {
+        result = 0;
+    }
+    return result;
+}
+
+float f16Tof32(unsigned int x)
+{
+    unsigned int sign;
+    int exp;
+    unsigned int frac;
+    unsigned int result;
+    u32f32       u;
+
+    frac = EXTRACT_F16_FRAC(x);
+    exp  = EXTRACT_F16_EXP(x);
+    sign = EXTRACT_F16_SIGN(x);
+    if (exp == 0x1F)
+    {
+        if (frac != 0)
+        {
+            // NaN
+            if (F16_IS_SNAN(x))
+            {
+                *exceptions |= F32_EX_INVALID;
+            }
+            result = 0;
+            //Get rid of exponent and sign
+#ifndef MOVIDIUS_FP32
+            result = x << 22;
+              result = f32_shift_right(result, 9);
+              result |= ((sign << 31) | 0x7F800000);
+#else
+            result |= ((sign << 31) | 0x7FC00000);
+#endif
+        }
+        else
+        {
+            //infinity
+            result = PACK_F32(sign, 0xFF, 0);
+        }
+    }
+    else if (exp == 0)
+    {
+        //either denormal or zero
+        if (frac == 0)
+        {
+            //zero
+            result = PACK_F32(sign, 0, 0);
+        }
+        else
+        {
+            //subnormal
+#ifndef MOVIDIUS_FP32
+            f16_normalize_subnormal(&frac, &exp);
+              exp--;
+              // ALDo: is the value 13 ok??
+              result = f16_shift_left(frac, 13);
+              // exp = exp + 127 - 15 = exp + 112
+              result = PACK_F32(sign, (exp + 0x70), result);
+#else
+            result = PACK_F32(sign, 0, 0);
+#endif
+        }
+    }
+    else
+    {
+        // ALDo: is the value 13 ok??
+        result = f16_shift_left(frac, 13);
+        result = PACK_F32(sign, (exp + 0x70), result);
+    }
+
+    u.u32 = result;
+    return u.f32; //andreil
+}
+#endif
+
 typedef enum NET_CAFFE_TENSFLOW {
     DP_AGE_NET = 0,
     DP_ALEX_NET,
@@ -101,8 +196,8 @@ char PEOPLE_NAME[PEOPLE_CNT][32];
 float VALID_PEOPLE_FOUR_STAGE[PEOPLE_CNT][4];
 
 int Total_valid_people = 0;
-float resultfp32[128];
-float result_stage[4];
+float resultfp32[128] = {0};
+float result_stage[4] = {0};
 
 int load_local_faces()
 {
@@ -396,14 +491,15 @@ int dump_index = 0;
 int num_valid_boxes = 0;
 int ProcessedBoxCnt=0;
 std::vector<std::string> nameVector;
+
+int type = 0;
 void box_callback_model_demo(void *result, void *param) {
     DP_MODEL_NET model = *((DP_MODEL_NET *) param);
     // i have a bug here,can not fetch the right param,
     // this is a movidius system bug,i will fix it later.
 
-    //
-    //
-    if( model == DP_SSD_MOBILI_NET) {
+    if (type == 0){
+    //if( model == DP_SSD_MOBILI_NET) {
         char *category[] = {"background", "aeroplane", "bicycle", "bird", "boat", "bottle", "bus",
                             "car", "cat", "chair", "cow", "diningtable",
                             "dog", "horse", "motorbike", "person", "pottedplant", "sheep", "sofa",
@@ -417,6 +513,11 @@ void box_callback_model_demo(void *result, void *param) {
         for (u32 i = 0; i < resultlen; i++)
             resultfp32[i] = f16Tof32(probabilities[i]);
         num_valid_boxes = int(resultfp32[0]);
+        if (num_valid_boxes >5 || num_box_demo < 0){
+            type = 0;
+            free(resultfp32);
+            return;
+        }
         int index = 0;
         ALOGE("num_valid_bxes:%d\n", num_valid_boxes);
         for (int box_index = 0; box_index < num_valid_boxes; box_index++) {
@@ -457,9 +558,13 @@ void box_callback_model_demo(void *result, void *param) {
         free(resultfp32);
         ProcessedBoxCnt = 0;
         nameVector.clear();
-        nameVector.reserve(num_box_demo);
+        if (num_box_demo > 0) {
+            nameVector.reserve(num_box_demo);
+            type = 1;
+        }
     }
-    else if (model == DP_FACE_NET)
+    //else if (model == DP_FACE_NET)
+    else if (type == 1)
     {
         ALOGE("cdk_result_model: DP_FACE_NET");
         char detector_people_name[32]={'\n'};
@@ -481,6 +586,7 @@ void box_callback_model_demo(void *result, void *param) {
         ProcessedBoxCnt++;
         if (ProcessedBoxCnt == num_box_demo)
         {
+            type = 0;
             JNIEnv *env;
 
             int getEnvStat = g_VM->GetEnv((void **) &env, JNI_VERSION_1_6);
