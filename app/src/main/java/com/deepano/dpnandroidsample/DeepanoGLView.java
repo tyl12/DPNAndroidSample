@@ -52,7 +52,7 @@ public class DeepanoGLView extends GLSurfaceView {
         wm.getDefaultDisplay().getMetrics(dm);
 
         f = (float) dm.heightPixels / dm.widthPixels;
-        if(f > (float) 960 / 1280 ){
+        if(f > (float) 960.0 / 1280 ){
             scaleRatio = (float) dm.widthPixels / 1280;
             offset = (dm.heightPixels - 960 * scaleRatio) / 2;
         }else {
@@ -61,7 +61,7 @@ public class DeepanoGLView extends GLSurfaceView {
         }
 
         mPaint = new Paint();
-        mPaint.setColor(Color.BLUE);
+        mPaint.setColor(Color.RED);
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(3);
         mPaint.setTextSize(40);
@@ -105,16 +105,16 @@ public class DeepanoGLView extends GLSurfaceView {
                     String gender="gender:";
                     String name = coordinateBuffer[index].name;
                     if (name.startsWith("tony")){
-                        age = "age: 30-40";
-                        gender = "gender: male";
+                        age = "30-40";
+                        gender = "male";
                     }
                     else if (name.startsWith("xiaocong")){
-                        age = "age: 20-30";
-                        gender = "gender: male";
+                        age = "20-30";
+                        gender = "male";
                     }
                     else if (name.startsWith("weipin")){
-                        age = "age: 20-30";
-                        gender = "gender: female";
+                        age = "20-30";
+                        gender = "female";
                     }
 //                    Paint paint = new Paint();
 //                    paint.setColor(Color.WHITE);
@@ -123,7 +123,7 @@ public class DeepanoGLView extends GLSurfaceView {
                     //paint.setColor(Color.BLACK);
                     //paint.setTextSize(20);
                     //canvas.drawText(name, scaleRatio * coordinateBuffer[index].x1, offset + scaleRatio * coordinateBuffer[index].y1, mPaint);
-                    String str= name + "\n" + age + "\n" + gender;
+                    String str= name + " , " + age + " , " + gender;
                     canvas.drawText(str, scaleRatio * coordinateBuffer[index].x1, offset + scaleRatio * coordinateBuffer[index].y1, mPaint);
 
                 }else{
@@ -139,16 +139,16 @@ public class DeepanoGLView extends GLSurfaceView {
                     String age="age:";
                     String gender="gender:";
                     if (name.startsWith("tony")){
-                        age = "age: 30-40";
-                        gender = "gender: male";
+                        age = "30-40";
+                        gender = "male";
                     }
                     else if (name.startsWith("xiaocong")){
-                        age = "age: 20-30";
-                        gender = "gender: male";
+                        age = "20-30";
+                        gender = "male";
                     }
                     else if (name.startsWith("weipin")){
                         age = "age: 20-30";
-                        gender = "gender: female";
+                        gender = "female";
                     }
 //                    Paint paint = new Paint();
 //                    paint.setColor(Color.WHITE);
@@ -157,7 +157,7 @@ public class DeepanoGLView extends GLSurfaceView {
                     //paint.setColor(Color.BLACK);
                     //paint.setTextSize(20);
                     //canvas.drawText(name, offset + scaleRatio * coordinateBuffer[index].x1, scaleRatio * coordinateBuffer[index].y1, mPaint);
-                    String str= name + "\n" + age + "\n" + gender;
+                    String str= name + " , " + age + " , " + gender;
                     canvas.drawText(str, offset + scaleRatio * coordinateBuffer[index].x1, scaleRatio * coordinateBuffer[index].y1, mPaint);
                 }
             }
