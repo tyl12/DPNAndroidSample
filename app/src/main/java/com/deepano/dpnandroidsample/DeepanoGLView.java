@@ -101,14 +101,30 @@ public class DeepanoGLView extends GLSurfaceView {
                             mPaint);
 
 
+                    String age="age:";
+                    String gender="gender:";
                     String name = coordinateBuffer[index].name;
+                    if (name.startsWith("tony")){
+                        age = "age: 30-40";
+                        gender = "gender: male";
+                    }
+                    else if (name.startsWith("xiaocong")){
+                        age = "age: 20-30";
+                        gender = "gender: male";
+                    }
+                    else if (name.startsWith("weipin")){
+                        age = "age: 20-30";
+                        gender = "gender: female";
+                    }
 //                    Paint paint = new Paint();
 //                    paint.setColor(Color.WHITE);
                     //canvas.drawPaint(paint);
 
                     //paint.setColor(Color.BLACK);
                     //paint.setTextSize(20);
-                    canvas.drawText(name, scaleRatio * coordinateBuffer[index].x1, offset + scaleRatio * coordinateBuffer[index].y1, mPaint);
+                    //canvas.drawText(name, scaleRatio * coordinateBuffer[index].x1, offset + scaleRatio * coordinateBuffer[index].y1, mPaint);
+                    String str= name + "\n" + age + "\n" + gender;
+                    canvas.drawText(str, scaleRatio * coordinateBuffer[index].x1, offset + scaleRatio * coordinateBuffer[index].y1, mPaint);
 
                 }else{
                     canvas.drawRect(
@@ -120,13 +136,29 @@ public class DeepanoGLView extends GLSurfaceView {
 
 
                     String name = coordinateBuffer[index].name;
+                    String age="age:";
+                    String gender="gender:";
+                    if (name.startsWith("tony")){
+                        age = "age: 30-40";
+                        gender = "gender: male";
+                    }
+                    else if (name.startsWith("xiaocong")){
+                        age = "age: 20-30";
+                        gender = "gender: male";
+                    }
+                    else if (name.startsWith("weipin")){
+                        age = "age: 20-30";
+                        gender = "gender: female";
+                    }
 //                    Paint paint = new Paint();
 //                    paint.setColor(Color.WHITE);
                     //canvas.drawPaint(paint);
 
                     //paint.setColor(Color.BLACK);
                     //paint.setTextSize(20);
-                    canvas.drawText(name, offset + scaleRatio * coordinateBuffer[index].x1, scaleRatio * coordinateBuffer[index].y1, mPaint);
+                    //canvas.drawText(name, offset + scaleRatio * coordinateBuffer[index].x1, scaleRatio * coordinateBuffer[index].y1, mPaint);
+                    String str= name + "\n" + age + "\n" + gender;
+                    canvas.drawText(str, offset + scaleRatio * coordinateBuffer[index].x1, scaleRatio * coordinateBuffer[index].y1, mPaint);
                 }
             }
 

@@ -580,11 +580,21 @@ void box_callback_model_demo(void *result, void *param) {
             memcpy(categoles[index], category[int(resultfp32[base_index + 1])], 20);
             index++;
         }
+
         //usleep(2000 * 1000);
         num_box_demo = index;
         free(resultfp32);
         ProcessedBoxCnt = 0;
         nameVector.clear();
+
+        if (num_box_demo == 1 &&
+            fabs(box_demo[0].x2 - box_demo[0].x1) > 0.7*1280 &&
+            fabs(box_demo[0].y2 - box_demo[0].y1) > 0.7*960){
+            ALOGE("Too big face, skip\n");
+            num_box_demo = 0;
+        }
+
+
         if (num_box_demo > 0) {
             nameVector.reserve(num_box_demo);
             //type = 1;
