@@ -64,6 +64,7 @@ public class DeepanoGLView extends GLSurfaceView {
         mPaint.setColor(Color.BLUE);
         mPaint.setStyle(Paint.Style.STROKE);
         mPaint.setStrokeWidth(3);
+        mPaint.setTextSize(40);
 
         renderer = new GLFrameRenderer(this, dm.widthPixels, dm.heightPixels);
         setEGLContextClientVersion(2);
@@ -98,6 +99,17 @@ public class DeepanoGLView extends GLSurfaceView {
                             scaleRatio * coordinateBuffer[index].x2,
                             offset + scaleRatio * coordinateBuffer[index].y2,
                             mPaint);
+
+
+                    String name = coordinateBuffer[index].name;
+//                    Paint paint = new Paint();
+//                    paint.setColor(Color.WHITE);
+                    //canvas.drawPaint(paint);
+
+                    //paint.setColor(Color.BLACK);
+                    //paint.setTextSize(20);
+                    canvas.drawText(name, scaleRatio * coordinateBuffer[index].x1, offset + scaleRatio * coordinateBuffer[index].y1, mPaint);
+
                 }else{
                     canvas.drawRect(
                             offset + scaleRatio * coordinateBuffer[index].x1,
@@ -105,6 +117,16 @@ public class DeepanoGLView extends GLSurfaceView {
                             offset + scaleRatio * coordinateBuffer[index].x2,
                             scaleRatio * coordinateBuffer[index].y2,
                             mPaint);
+
+
+                    String name = coordinateBuffer[index].name;
+//                    Paint paint = new Paint();
+//                    paint.setColor(Color.WHITE);
+                    //canvas.drawPaint(paint);
+
+                    //paint.setColor(Color.BLACK);
+                    //paint.setTextSize(20);
+                    canvas.drawText(name, offset + scaleRatio * coordinateBuffer[index].x1, scaleRatio * coordinateBuffer[index].y1, mPaint);
                 }
             }
 

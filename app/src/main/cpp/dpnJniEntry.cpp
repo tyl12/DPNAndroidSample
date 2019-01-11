@@ -597,9 +597,15 @@ void box_callback_model_demo(void *result, void *param) {
         char detector_people_name[32]={'\n'};
         std::array<float, 128> feature = print_facenet_result(result,detector_people_name);
 
+
         {
             char fname[64];
-            sprintf(fname, "/sdcard/feature_%d_%s.txt", dump_index, detector_people_name);
+            if (strlen(detector_people_name) >=2 ) {
+                sprintf(fname, "/sdcard/feature_%d_%s.txt", dump_index, detector_people_name);
+            }
+            else{
+                sprintf(fname, "/sdcard/feature_%d.txt", dump_index);
+            }
             if (strlen(detector_people_name) > 1)
                 ALOGE("Found face: %s", detector_people_name);
             std::ofstream of(fname);
@@ -607,7 +613,12 @@ void box_callback_model_demo(void *result, void *param) {
                 //of << i<<": "<< feature[i]<<std::endl;
                 of << feature[i] << std::endl;
             }
+            dump_index++;
+            if (dump_index>=100)
+                dump_index = 0;
         }
+
+
         nameVector.push_back(detector_people_name);
 
         ProcessedBoxCnt++;
